@@ -13,6 +13,7 @@ Optional:
 
 ### Usage
 
+```
 Music:
   playing Show information for the song currently playing.
   skip    Skip the current song.
@@ -24,6 +25,7 @@ Music:
 
 Type !help command for more info on a command.
 You can also type !help category for more info on a category.
+```
 
 ### Setup
 
