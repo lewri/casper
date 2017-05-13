@@ -117,8 +117,17 @@ class Music:
         """
         state = self.get_voice_state(ctx.message.server)
         opts = {
-            'default_search': 'auto',
+            'source_address': '0.0.0.0',
+            'format': 'bestaudio/best',
+            'extractaudio': True,
+            'audioformat': "mp3",
+            'noplaylist': True,
+            'nocheckcertificate': True,
+            'ignoreerrors': True,
             'quiet': True,
+            'no_warnings': True,
+            'outtmpl': "data/audio/cache/%(id)s",
+            'default_search': 'auto'
         }
 
         if state.voice is None:
