@@ -1,8 +1,11 @@
+from pprint import pprint
 import asyncio
 import logging
+import os
 
-import discord
 from discord.ext import commands
+import youtube_dl
+import discord
 
 import config
 
@@ -14,17 +17,22 @@ logging.basicConfig(level=logging.INFO)
 
 
 class VoiceEntry:
-    def __init__(self, message, player):
+    def __init__(self, message, player, song_info):
         self.requester = message.author
         self.channel = message.channel
         self.player = player
+        self.song_info = song_info
 
     def __str__(self):
-        fmt = '*{0.title}* uploaded by {0.uploader} - requested by {1.display_name}'
-        duration = self.player.duration
-        if duration:
-            fmt = fmt + ' [length: {0[0]}m {0[1]}s]'.format(divmod(duration, 60))
-        return fmt.format(self.player, self.requester)
+        duration = self.song_info['duration']
+        if not duration:
+            duration = 0
+        return '{0} uploaded by {1} - requested by {2} [length: {3[0]}m {3[1]}s]'.format(
+            self.song_info['title'],
+            self.song_info['uploader'],
+            self.requester.display_name,
+            divmod(duration, 60),
+        )
 
 
 class VoiceState:
@@ -97,6 +105,12 @@ class Music:
         """
         Summon casper into your current voice channel.
         """
+
+        if config.DEV_MODE and ctx.message.author.id != config.DEV_ID:
+            await self.bot.say(
+                'I am currently running in dev mode, and will not respond to non-admin commands.')
+            return False
+
         summoned_channel = ctx.message.author.voice_channel
         if summoned_channel is None:
             await self.bot.say('You are not in a voice channel.')
@@ -115,8 +129,13 @@ class Music:
         """
         Request a song from youtube.
         """
+        if config.DEV_MODE and ctx.message.author.id != config.DEV_ID:
+            await self.bot.say(
+                'I am currently running in dev mode, and will not respond to non-admin commands.')
+            return False
+
         state = self.get_voice_state(ctx.message.server)
-        opts = {
+        ytdl_opts = {
             'source_address': '0.0.0.0',
             'format': 'bestaudio/best',
             'extractaudio': True,
@@ -126,8 +145,8 @@ class Music:
             'ignoreerrors': True,
             'quiet': True,
             'no_warnings': True,
-            'outtmpl': "data/audio/cache/%(id)s",
-            'default_search': 'auto'
+            'outtmpl': 'cache/audio/%(id)s',
+            'default_search': 'auto',
         }
 
         if state.voice is None:
@@ -136,15 +155,27 @@ class Music:
                 return
 
         try:
-            player = await state.voice.create_ytdl_player(
-                song,
-                ytdl_options=opts,
-                after=state.toggle_next)
+            with youtube_dl.YoutubeDL(ytdl_opts) as ytdl:
+                logging.info('Getting song info...')
+                info = ytdl.extract_info(song, download=False)['entries'][0]
+                song_file = 'cache/audio/{}'.format(info['id'])
+                logging.info('Song file: {}'.format(song_file))
+                if not os.path.isfile(song_file):
+                    logging.info('New song, downloading to {}'.format(song_file))
+                    ytdl.download([song])
+                    logging.info('Finished downloading song to {}'.format(song_file))
+            logging.info('Creating player for {}'.format(song_file))
+            player = state.voice.create_ffmpeg_player(
+                song_file,
+                after=state.toggle_next,
+                options='-b:a 64k -bufsize 64k')
         except Exception as e:
             fmt = 'An error occurred while processing this request: ```py\n{}: {}\n```'
             await self.bot.send_message(ctx.message.channel, fmt.format(type(e).__name__, e))
         else:
-            entry = VoiceEntry(ctx.message, player)
+            logging.info('Creating voice entry for {}'.format(song_file))
+            entry = VoiceEntry(ctx.message, player, info)
+            logging.info(entry)
 
             if state.current is not None:
                 await self.bot.say('Enqueued ' + str(entry))
@@ -155,6 +186,11 @@ class Music:
         """
         Stop the music session entirely.
         """
+        if config.DEV_MODE and ctx.message.author.id != config.DEV_ID:
+            await self.bot.say(
+                'I am currently running in dev mode, and will not respond to non-admin commands.')
+            return False
+
         server = ctx.message.server
         state = self.get_voice_state(server)
 
@@ -177,6 +213,11 @@ class Music:
         """
         Skip the current song.
         """
+        if config.DEV_MODE and ctx.message.author.id != config.DEV_ID:
+            await self.bot.say(
+                'I am currently running in dev mode, and will not respond to non-admin commands.')
+            return False
+
         state = self.get_voice_state(ctx.message.server)
         if not state.is_playing():
             await self.bot.say('Can\'t skip what ain\'t there!')
@@ -202,6 +243,11 @@ class Music:
         """
         Show information for the song currently playing.
         """
+        if config.DEV_MODE and ctx.message.author.id != config.DEV_ID:
+            await self.bot.say(
+                'I am currently running in dev mode, and will not respond to non-admin commands.')
+            return False
+
         state = self.get_voice_state(ctx.message.server)
         if state.current is None:
             await self.bot.say('I\'m not playing anything...')
