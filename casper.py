@@ -154,6 +154,8 @@ class Music:
             if not success:
                 return
 
+        await self.bot.say('Searching for "{}"...'.format(song))
+
         try:
             with youtube_dl.YoutubeDL(ytdl_opts) as ytdl:
                 logging.info('Getting song info...')
