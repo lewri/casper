@@ -1,3 +1,5 @@
+# NB: This isn't maintained and was moved from Gitlab. Feel free to fork it and make it work. #
+
 # Casper
 
 ## The friendly discord music bot
